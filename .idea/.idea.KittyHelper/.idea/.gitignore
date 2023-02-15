@@ -1,0 +1,13 @@
+﻿# Default ignored files
+/shelf/
+/workspace.xml
+# Rider ignored files
+/contentModel.xml
+/projectSettingsUpdater.xml
+/modules.xml
+/.idea.KittyHelper.iml
+# Datasource local storage ignored files
+/../../../../../../../../../:\Users\xjhxy\Documents\KittyHelper\KittyHelper\.idea\.idea.KittyHelper\.idea/dataSources/
+/dataSources.local.xml
+# Editor-based HTTP Client requests
+/httpRequests/
