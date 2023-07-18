@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Reflection;
-using NUnit.Framework;
 using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
@@ -20,11 +19,18 @@ namespace Editor
         public static void SplitController()
         {
             Init();
-            List<ChildAnimatorState> rootStates = FindRoots();
-            foreach (ChildAnimatorState rootState in rootStates)
+            List<List<AnimatorState>> groups = GroupRootStates();
+            for (var index = 0; index < groups.Count; index++)
             {
-                List<AnimatorState> states = GetConnectedStates(rootState.state);
-                CreateController(rootState.state.name.Replace(" ", ""), rootState, states);
+                List<AnimatorState> rootStatesOfGroup = groups[index];
+                HashSet<AnimatorState> allStates = new HashSet<AnimatorState>();
+                foreach (var rootState in rootStatesOfGroup)
+                {
+                    List<AnimatorState> states = GetConnectedStatesFromRoot(rootState);
+                    allStates.UnionWith(states);
+                }
+
+                CreateController(s_AnimatorController.name + index, rootStatesOfGroup, allStates);
             }
         }
 
@@ -44,7 +50,7 @@ namespace Editor
             foreach (AnimatorControllerLayer layer in s_AnimatorController.layers)
             {
                 layers = layers + ' ' + layer.name;
-                if (layer.name == "Base Layer")
+                if (layer.name == "New Layer")
                 {
                     s_BaseLayer = layer;
                 }
@@ -97,25 +103,31 @@ namespace Editor
             return controller;
         }
 
-        private static List<ChildAnimatorState> FindRoots()
+        private static List<List<AnimatorState>> GroupRootStates()
         {
-            List<ChildAnimatorState> results = new List<ChildAnimatorState>();
+            List<AnimatorState> group1 = new List<AnimatorState>();
+            List<AnimatorState> group2 = new List<AnimatorState>();
             foreach (ChildAnimatorState state in s_AllStates)
             {
-                if (state.state.name.Equals("Old State 1") && HasAnyStateTransitionConditionOfParameter(state, "EnterState"))
+                if (state.state.name.StartsWith("Old State") &&
+                    HasAnyStateTransitionConditionOfParameter(state.state, "EnterState"))
                 {
-                    results.Add(state);
+                    group1.Add(state.state);
                 }
                 else if (state.state.name.Equals("New State 1"))
                 {
-                    results.Add(state);
+                    group2.Add(state.state);
                 }
             }
 
+            List<List<AnimatorState>> results = new List<List<AnimatorState>>
+            {
+                group1, group2
+            };
             return results;
         }
 
-        private static List<AnimatorState> GetConnectedStates(AnimatorState state)
+        private static List<AnimatorState> GetConnectedStatesFromRoot(AnimatorState state)
         {
             var connectedStates = new List<AnimatorState>();
             var visitedStates = new HashSet<AnimatorState>();
@@ -151,24 +163,16 @@ namespace Editor
             return connectedStates;
         }
 
-        private static bool HasAnyStateTransitionConditionOfParameter(ChildAnimatorState state, string parameter)
+        private static bool HasAnyStateTransitionConditionOfParameter(AnimatorState state, string parameter)
         {
-            AnimatorStateTransition toStateAnyStateTransition = null;
-            foreach (var anyStateTransition in s_StateMachine.anyStateTransitions)
+            var anyStateTransition = FindAnyStateTransitionToRootState(state);
+
+            if (anyStateTransition == null)
             {
-                if (anyStateTransition.destinationState.name.Equals(state.state.name))
-                {
-                    toStateAnyStateTransition = anyStateTransition;
-                    break;
-                }
+                return false;
             }
 
-            if (toStateAnyStateTransition == null)
-            {
-                throw new AssertionException("Cannot find any state transition to this state " + state.state.name);
-            }
-
-            foreach (var condition in toStateAnyStateTransition.conditions)
+            foreach (var condition in anyStateTransition.conditions)
             {
                 if (condition.parameter.Equals(parameter))
                 {
@@ -180,10 +184,10 @@ namespace Editor
         }
 
         private static void CreateController(string controllerName,
-            ChildAnimatorState rootState, List<AnimatorState> states)
+            List<AnimatorState> rootStates, HashSet<AnimatorState> states)
         {
-            var newController =
-                AnimatorController.CreateAnimatorControllerAtPath(s_ControllerOutputPath + controllerName + ".controller");
+            var controllerOutputPath = s_ControllerOutputPath + controllerName + ".controller";
+            var newController = AnimatorController.CreateAnimatorControllerAtPath(controllerOutputPath);
             foreach (var param in s_AnimatorController.parameters)
             {
                 newController.AddParameter(param.name, param.type);
@@ -201,9 +205,19 @@ namespace Editor
             foreach (var state in states)
             {
                 var newState = nameToNewState[state.name];
-                if (state.name.Equals(rootState.state.name))
+                foreach (var rootState in rootStates)
                 {
-                    newStateMachine.AddAnyStateTransition(newState);
+                    if (rootState.name.Equals(state.name))
+                    {
+                        var newAnyStateTransition = newStateMachine.AddAnyStateTransition(newState);
+                        var sourceAnyStateTransition = FindAnyStateTransitionToRootState(rootState);
+                        if (sourceAnyStateTransition == null)
+                        {
+                            throw new Exception("Cannot find any state transition for " + rootState.name);
+                        }
+
+                        CopyTransition(sourceAnyStateTransition, newAnyStateTransition);
+                    }
                 }
 
                 CopyState(state, newState);
@@ -217,6 +231,21 @@ namespace Editor
             }
 
             AssetDatabase.SaveAssets();
+        }
+
+        private static AnimatorStateTransition FindAnyStateTransitionToRootState(AnimatorState state)
+        {
+            AnimatorStateTransition toStateAnyStateTransition = null;
+            foreach (var anyStateTransition in s_StateMachine.anyStateTransitions)
+            {
+                if (anyStateTransition.destinationState.name.Equals(state.name))
+                {
+                    toStateAnyStateTransition = anyStateTransition;
+                    break;
+                }
+            }
+
+            return toStateAnyStateTransition;
         }
 
         private static void CopyState(AnimatorState sourceState, AnimatorState targetState)
