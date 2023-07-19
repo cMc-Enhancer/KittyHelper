@@ -23,6 +23,9 @@ namespace Editor
             List<List<AnimatorState>> groups = GroupRootStates();
             for (var index = 0; index < groups.Count; index++)
             {
+                var groupId = index + 1;
+                Debug.LogFormat("Processing group {0}", groupId);
+                
                 List<AnimatorState> rootStatesOfGroup = groups[index];
                 HashSet<AnimatorState> allStates = new HashSet<AnimatorState>();
                 foreach (var rootState in rootStatesOfGroup)
@@ -30,9 +33,13 @@ namespace Editor
                     List<AnimatorState> states = GetConnectedStatesFromRoot(rootState);
                     allStates.UnionWith(states);
                 }
+                
+                Debug.LogFormat("Found {0} states in group {1}", allStates.Count, groupId);
 
-                // DeleteStates(allStates);
+                DeleteStates(allStates);
                 // CreateController(s_AnimatorController.name + index, rootStatesOfGroup, allStates);
+                
+                Debug.LogFormat("====================== Group {0} process completed ======================", groupId);
             }
         }
 
@@ -140,6 +147,8 @@ namespace Editor
                         @group.Select(s => s.name).Aggregate((a, b) => a + ", " + b));
                 }
             }
+            
+            Debug.Log("========== Group Complete ===========");
 
             return results;
         }
@@ -174,8 +183,6 @@ namespace Editor
                 connectedStates.Count,
                 state.name,
                 connectedStates.Select(s => s.name).Aggregate((a, b) => a + ", " + b));
-
-            Debug.Log("================ Group Split ================");
 
             return connectedStates;
         }
