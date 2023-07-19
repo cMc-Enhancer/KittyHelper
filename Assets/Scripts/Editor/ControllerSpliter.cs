@@ -12,8 +12,10 @@ namespace Editor
     {
         private static AnimatorController s_AnimatorController;
         private static AnimatorControllerLayer s_BaseLayer;
+        private static AnimatorControllerLayer s_CarryLayer;
         private static AnimatorStateMachine s_StateMachine;
         private static ChildAnimatorState[] s_AllStates;
+        private const string kCarryLayerName = "EyeBlink";
         private const string kControllerOutputPath = "Assets/ArtAssets/MyAnimators/CharShow/";
 
         [MenuItem("Jobs/SplitController %w")]
@@ -25,7 +27,7 @@ namespace Editor
             {
                 var groupId = index + 1;
                 Debug.LogFormat("Processing group {0}", groupId);
-                
+
                 List<AnimatorState> rootStatesOfGroup = groups[index];
                 HashSet<AnimatorState> allStates = new HashSet<AnimatorState>();
                 foreach (var rootState in rootStatesOfGroup)
@@ -33,12 +35,12 @@ namespace Editor
                     List<AnimatorState> states = GetConnectedStatesFromRoot(rootState);
                     allStates.UnionWith(states);
                 }
-                
+
                 Debug.LogFormat("Found {0} states in group {1}", allStates.Count, groupId);
 
                 CreateController(s_AnimatorController.name + index, rootStatesOfGroup, allStates);
                 DeleteStates(allStates);
-                
+
                 Debug.LogFormat("====================== Group {0} process completed ======================", groupId);
             }
         }
@@ -47,25 +49,22 @@ namespace Editor
         {
             s_AnimatorController = GetAnimatorController();
 
-            string ps = "Params:";
-            foreach (AnimatorControllerParameter param in s_AnimatorController.parameters)
-            {
-                ps = ps + ' ' + param.name;
-            }
+            Debug.LogFormat("Params: {0}",
+                s_AnimatorController.parameters.Select(s => s.name).Aggregate((a, b) => a + ", " + b));
 
-            Debug.Log(ps);
-
-            string layers = "Layers:";
             foreach (AnimatorControllerLayer layer in s_AnimatorController.layers)
             {
-                layers = layers + ' ' + layer.name;
                 if (layer.name == "Base Layer")
                 {
                     s_BaseLayer = layer;
                 }
+                else if (layer.name == kCarryLayerName)
+                {
+                    s_CarryLayer = layer;
+                }
             }
 
-            Debug.Log(layers);
+            Debug.LogFormat("Layers: {0}", s_AnimatorController.layers.Select(s => s.name).Aggregate((a, b) => a + ", " + b));
 
             if (s_BaseLayer == null)
             {
@@ -73,15 +72,11 @@ namespace Editor
                 return;
             }
 
-            string statesOfLayer = "States of layer " + s_BaseLayer.name + ":";
             s_StateMachine = s_BaseLayer.stateMachine;
             s_AllStates = s_StateMachine.states;
-            foreach (ChildAnimatorState state in s_AllStates)
-            {
-                statesOfLayer = statesOfLayer + ' ' + state.state.name;
-            }
 
-            Debug.Log(statesOfLayer);
+            Debug.LogFormat("States of layer {0}: {1}", s_BaseLayer.name, 
+                s_AllStates.Select(s => s.state.name).Aggregate((a, b) => a + ", " + b));
 
             Debug.Log("========== Init Complete ===========");
         }
@@ -146,7 +141,7 @@ namespace Editor
                         @group.Select(s => s.name).Aggregate((a, b) => a + ", " + b));
                 }
             }
-            
+
             Debug.Log("========== Group Complete ===========");
 
             return results;
