@@ -38,7 +38,7 @@ namespace Editor
 
                 Debug.LogFormat("Found {0} states in group {1}", allStates.Count, groupId);
 
-                CreateController(s_AnimatorController.name + index, rootStatesOfGroup, allStates);
+                CreateController(s_AnimatorController.name + index, allStates);
                 DeleteStates(allStates);
 
                 Debug.LogFormat("====================== Group {0} process completed ======================", groupId);
@@ -64,7 +64,8 @@ namespace Editor
                 }
             }
 
-            Debug.LogFormat("Layers: {0}", s_AnimatorController.layers.Select(s => s.name).Aggregate((a, b) => a + ", " + b));
+            Debug.LogFormat("Layers: {0}",
+                s_AnimatorController.layers.Select(s => s.name).Aggregate((a, b) => a + ", " + b));
 
             if (s_BaseLayer == null)
             {
@@ -75,7 +76,7 @@ namespace Editor
             s_StateMachine = s_BaseLayer.stateMachine;
             s_AllStates = s_StateMachine.states;
 
-            Debug.LogFormat("States of layer {0}: {1}", s_BaseLayer.name, 
+            Debug.LogFormat("States of layer {0}: {1}", s_BaseLayer.name,
                 s_AllStates.Select(s => s.state.name).Aggregate((a, b) => a + ", " + b));
 
             Debug.Log("========== Init Complete ===========");
@@ -217,7 +218,7 @@ namespace Editor
         }
 
         private static void CreateController(string controllerName,
-            List<AnimatorState> rootStates, HashSet<AnimatorState> states)
+            HashSet<AnimatorState> states)
         {
             var controllerOutputPath = kControllerOutputPath + controllerName + ".controller";
             var newController = AnimatorController.CreateAnimatorControllerAtPath(controllerOutputPath);
@@ -226,42 +227,13 @@ namespace Editor
                 newController.AddParameter(param.name, param.type);
             }
 
-            var newStateMachine = newController.layers[0].stateMachine;
+            var newBaseLayerStateMachine = newController.layers[0].stateMachine;
+            CopyLayer(s_BaseLayer, newController.layers[0], false);
+            CopyStatesAndTransitionsBetweenThem(s_StateMachine, newBaseLayerStateMachine, states);
 
-            var nameToNewState = new Dictionary<string, AnimatorState>(states.Count);
-            foreach (var state in states)
-            {
-                var newState = newStateMachine.AddState(state.name);
-                nameToNewState.Add(state.name, newState);
-            }
-
-            foreach (var state in states)
-            {
-                var newState = nameToNewState[state.name];
-                foreach (var rootState in rootStates)
-                {
-                    if (rootState.name.Equals(state.name))
-                    {
-                        var newAnyStateTransition = newStateMachine.AddAnyStateTransition(newState);
-                        var sourceAnyStateTransition = FindAnyStateTransitionToRootState(rootState);
-                        if (sourceAnyStateTransition == null)
-                        {
-                            throw new Exception("Cannot find any state transition for " + rootState.name);
-                        }
-
-                        CopyTransition(sourceAnyStateTransition, newAnyStateTransition);
-                    }
-                }
-
-                CopyState(state, newState);
-
-                foreach (var transition in state.transitions)
-                {
-                    var newTransition =
-                        newState.AddTransition(nameToNewState[transition.destinationState.name]);
-                    CopyTransition(transition, newTransition);
-                }
-            }
+            newController.AddLayer(kCarryLayerName);
+            AnimatorControllerLayer newCarryLayer = newController.layers.First(c => c.name == kCarryLayerName);
+            CopyLayer(s_CarryLayer, newCarryLayer, true);
 
             AssetDatabase.SaveAssets();
         }
@@ -276,17 +248,76 @@ namespace Editor
 
         private static AnimatorStateTransition FindAnyStateTransitionToRootState(AnimatorState state)
         {
-            AnimatorStateTransition toStateAnyStateTransition = null;
-            foreach (var anyStateTransition in s_StateMachine.anyStateTransitions)
+            foreach (var layer in s_AnimatorController.layers)
             {
-                if (anyStateTransition.destinationState.name.Equals(state.name))
+                foreach (var transition in layer.stateMachine.anyStateTransitions)
                 {
-                    toStateAnyStateTransition = anyStateTransition;
-                    break;
+                    if (transition.destinationState.Equals(state))
+                    {
+                        return transition;
+                    }
                 }
             }
 
-            return toStateAnyStateTransition;
+            return null;
+        }
+
+        private static void CopyStatesAndTransitionsBetweenThem(AnimatorStateMachine sourceStateMachine,
+            AnimatorStateMachine targetStateMachine,
+            ICollection<AnimatorState> toCopyStates)
+        {
+            var nameToNewState = new Dictionary<string, AnimatorState>(toCopyStates.Count);
+            foreach (var state in toCopyStates)
+            {
+                var newState = targetStateMachine.AddState(state.name);
+                CopyState(state, newState);
+                if (sourceStateMachine.defaultState.Equals(state))
+                {
+                    targetStateMachine.defaultState = newState;
+                }
+                nameToNewState.Add(state.name, newState);
+            }
+
+            foreach (var transition in sourceStateMachine.anyStateTransitions)
+            {
+                AnimatorState state = transition.destinationState;
+                if (toCopyStates.Contains(state))
+                {
+                    var newState = nameToNewState[state.name];
+                    var newAnyStateTransition = targetStateMachine.AddAnyStateTransition(newState);
+                    CopyTransition(transition, newAnyStateTransition);
+                }
+            }
+
+            foreach (var state in toCopyStates)
+            {
+                var newState = nameToNewState[state.name];
+                foreach (var transition in state.transitions)
+                {
+                    var newTransition =
+                        newState.AddTransition(nameToNewState[transition.destinationState.name]);
+                    CopyTransition(transition, newTransition);
+                }
+            }
+        }
+
+        private static void CopyLayer(AnimatorControllerLayer sourceLayer, AnimatorControllerLayer targetLayer,
+            bool copyStatesAndTransition)
+        {
+            targetLayer.name = sourceLayer.name;
+            targetLayer.defaultWeight = sourceLayer.defaultWeight;
+            targetLayer.avatarMask = sourceLayer.avatarMask;
+            targetLayer.blendingMode = sourceLayer.blendingMode;
+            targetLayer.iKPass = sourceLayer.iKPass;
+            targetLayer.syncedLayerIndex = sourceLayer.syncedLayerIndex;
+            targetLayer.syncedLayerAffectsTiming = sourceLayer.syncedLayerAffectsTiming;
+
+            if (copyStatesAndTransition)
+            {
+                var sourceStates = sourceLayer.stateMachine.states.Select(s => s.state).ToList();
+                CopyStatesAndTransitionsBetweenThem(sourceLayer.stateMachine, targetLayer.stateMachine,
+                    sourceStates);
+            }
         }
 
         private static void CopyState(AnimatorState sourceState, AnimatorState targetState)
@@ -306,6 +337,11 @@ namespace Editor
             targetState.cycleOffsetParameter = sourceState.cycleOffsetParameter;
             targetState.iKOnFeet = sourceState.iKOnFeet;
             targetState.writeDefaultValues = sourceState.writeDefaultValues;
+
+            foreach (StateMachineBehaviour behaviour in sourceState.behaviours)
+            {
+                targetState.AddStateMachineBehaviour(behaviour.GetType());
+            }
         }
 
         private static void CopyTransition(AnimatorStateTransition sourceTransition,
