@@ -221,15 +221,22 @@ namespace Editor
             HashSet<AnimatorState> states)
         {
             var controllerOutputPath = kControllerOutputPath + controllerName + ".controller";
+            
+            Debug.LogFormat("Creating new controller at: {0}", controllerOutputPath);
+            
             var newController = AnimatorController.CreateAnimatorControllerAtPath(controllerOutputPath);
             foreach (var param in s_AnimatorController.parameters)
             {
                 newController.AddParameter(param.name, param.type);
             }
+            
+            Debug.Log("Copying base layer");
 
             var newBaseLayerStateMachine = newController.layers[0].stateMachine;
             CopyLayer(s_BaseLayer, newController.layers[0], false);
             CopyStatesAndTransitionsBetweenThem(s_StateMachine, newBaseLayerStateMachine, states);
+            
+            Debug.Log("Copying carry layer");
 
             newController.AddLayer(kCarryLayerName);
             AnimatorControllerLayer newCarryLayer = newController.layers.First(c => c.name == kCarryLayerName);
@@ -240,6 +247,7 @@ namespace Editor
 
         private static void DeleteStates(HashSet<AnimatorState> animatorStates)
         {
+            Debug.LogFormat("Deleting {0} states", animatorStates.Count);
             foreach (var state in animatorStates)
             {
                 s_StateMachine.RemoveState(state);
