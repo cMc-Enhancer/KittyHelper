@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using UnityEditor;
 using UnityEditor.Animations;
@@ -13,7 +14,7 @@ namespace Editor
         private static AnimatorControllerLayer s_BaseLayer;
         private static AnimatorStateMachine s_StateMachine;
         private static ChildAnimatorState[] s_AllStates;
-        private static string s_ControllerOutputPath = "Assets/Resources/";
+        private const string kControllerOutputPath = "Assets/Resources/";
 
         [MenuItem("Jobs/SplitController %w")]
         public static void SplitController()
@@ -30,7 +31,7 @@ namespace Editor
                     allStates.UnionWith(states);
                 }
 
-                DeleteStates(allStates);
+                // DeleteStates(allStates);
                 // CreateController(s_AnimatorController.name + index, rootStatesOfGroup, allStates);
             }
         }
@@ -51,7 +52,7 @@ namespace Editor
             foreach (AnimatorControllerLayer layer in s_AnimatorController.layers)
             {
                 layers = layers + ' ' + layer.name;
-                if (layer.name == "Base Layer")
+                if (layer.name == "New Layer")
                 {
                     s_BaseLayer = layer;
                 }
@@ -125,6 +126,21 @@ namespace Editor
             {
                 group1, group2
             };
+
+            for (int i = 0; i < results.Count; i++)
+            {
+                var group = results[i];
+                if (group.Count == 0)
+                {
+                    Debug.LogErrorFormat("Found no root state for group {0}", i);
+                }
+                else
+                {
+                    Debug.LogFormat("Found root state for group {0}: {1}", i,
+                        @group.Select(s => s.name).Aggregate((a, b) => a + ", " + b));
+                }
+            }
+
             return results;
         }
 
@@ -154,10 +170,10 @@ namespace Editor
                 }
             }
 
-            foreach (var s in connectedStates)
-            {
-                Debug.Log(s.name);
-            }
+            Debug.LogFormat("Found {0} states connected to root state {1}: {2}",
+                connectedStates.Count,
+                state.name,
+                connectedStates.Select(s => s.name).Aggregate((a, b) => a + ", " + b));
 
             Debug.Log("================ Group Split ================");
 
@@ -166,6 +182,21 @@ namespace Editor
 
         private static bool HasAnyStateTransitionConditionOfParameter(AnimatorState state, string parameter)
         {
+            bool found = false;
+            foreach (var param in s_AnimatorController.parameters)
+            {
+                if (param.name == parameter)
+                {
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found)
+            {
+                Debug.LogErrorFormat("This controller does not have parameter named {0}", parameter);
+            }
+
             var anyStateTransition = FindAnyStateTransitionToRootState(state);
 
             if (anyStateTransition == null)
@@ -187,7 +218,7 @@ namespace Editor
         private static void CreateController(string controllerName,
             List<AnimatorState> rootStates, HashSet<AnimatorState> states)
         {
-            var controllerOutputPath = s_ControllerOutputPath + controllerName + ".controller";
+            var controllerOutputPath = kControllerOutputPath + controllerName + ".controller";
             var newController = AnimatorController.CreateAnimatorControllerAtPath(controllerOutputPath);
             foreach (var param in s_AnimatorController.parameters)
             {
