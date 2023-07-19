@@ -30,7 +30,8 @@ namespace Editor
                     allStates.UnionWith(states);
                 }
 
-                CreateController(s_AnimatorController.name + index, rootStatesOfGroup, allStates);
+                DeleteStates(allStates);
+                // CreateController(s_AnimatorController.name + index, rootStatesOfGroup, allStates);
             }
         }
 
@@ -231,6 +232,14 @@ namespace Editor
             }
 
             AssetDatabase.SaveAssets();
+        }
+
+        private static void DeleteStates(HashSet<AnimatorState> animatorStates)
+        {
+            foreach (var state in animatorStates)
+            {
+                s_StateMachine.RemoveState(state);
+            }
         }
 
         private static AnimatorStateTransition FindAnyStateTransitionToRootState(AnimatorState state)
