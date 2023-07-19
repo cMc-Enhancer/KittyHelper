@@ -50,7 +50,7 @@ namespace Editor
             foreach (AnimatorControllerLayer layer in s_AnimatorController.layers)
             {
                 layers = layers + ' ' + layer.name;
-                if (layer.name == "New Layer")
+                if (layer.name == "Base Layer")
                 {
                     s_BaseLayer = layer;
                 }
