@@ -14,7 +14,7 @@ namespace Editor
         private static AnimatorControllerLayer s_BaseLayer;
         private static AnimatorStateMachine s_StateMachine;
         private static ChildAnimatorState[] s_AllStates;
-        private const string kControllerOutputPath = "Assets/Resources/";
+        private const string kControllerOutputPath = "Assets/ArtAssets/MyAnimators/CharShow/";
 
         [MenuItem("Jobs/SplitController %w")]
         public static void SplitController()
@@ -59,7 +59,7 @@ namespace Editor
             foreach (AnimatorControllerLayer layer in s_AnimatorController.layers)
             {
                 layers = layers + ' ' + layer.name;
-                if (layer.name == "New Layer")
+                if (layer.name == "Base Layer")
                 {
                     s_BaseLayer = layer;
                 }
@@ -118,12 +118,11 @@ namespace Editor
             List<AnimatorState> group2 = new List<AnimatorState>();
             foreach (ChildAnimatorState state in s_AllStates)
             {
-                if (state.state.name.StartsWith("Old State") &&
-                    HasAnyStateTransitionConditionOfParameter(state.state, "EnterState"))
+                if (HasAnyStateTransitionConditionOfParameter(state.state, "EnterState"))
                 {
                     group1.Add(state.state);
                 }
-                else if (state.state.name.Equals("New State 1"))
+                else if (state.state.name.StartsWith("Team"))
                 {
                     group2.Add(state.state);
                 }
