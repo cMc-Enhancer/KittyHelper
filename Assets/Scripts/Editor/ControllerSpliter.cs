@@ -36,8 +36,8 @@ namespace Editor
                 
                 Debug.LogFormat("Found {0} states in group {1}", allStates.Count, groupId);
 
+                CreateController(s_AnimatorController.name + index, rootStatesOfGroup, allStates);
                 DeleteStates(allStates);
-                // CreateController(s_AnimatorController.name + index, rootStatesOfGroup, allStates);
                 
                 Debug.LogFormat("====================== Group {0} process completed ======================", groupId);
             }
